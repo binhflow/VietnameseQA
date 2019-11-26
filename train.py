@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import run_classifier
 import run_classifier_with_tfhub
+import models
 import tensorflow as tf
 import json
 import datetime
@@ -33,12 +34,12 @@ def preprocess(data_dict, modelhub):
   tokenizer = run_classifier_with_tfhub.create_tokenizer_from_hub_module(BERT_MODEL_HUB)
   train_features = run_classifier.convert_examples_to_features(
       train_InputExamples, label_list, MAX_SEQ_LENGTH, tokenizer)
-  dev_features = bert.run_classifier.convert_examples_to_features(dev_InputExamples, label_list, MAX_SEQ_LENGTH, tokenizer)
+  dev_features = run_classifier.convert_examples_to_features(dev_InputExamples, label_list, MAX_SEQ_LENGTH, tokenizer)
   return train_features, dev_features
 
-def model_train(estimator, train_features):
+def model_train(estimator, train_features, num_train_steps):
   print('***** Started training at {} *****'.format(datetime.datetime.now()))
-  print('  Num examples = {}'.format(len(train)))
+  print('  Num examples = {}'.format(len(train_features)))
   print('  Batch size = {}'.format(TRAIN_BATCH_SIZE))
   tf.logging.info("  Num steps = %d", num_train_steps)
   train_input_fn = run_classifier.input_fn_builder(
@@ -52,11 +53,11 @@ def model_train(estimator, train_features):
 def model_eval(estimator, dev_features):
   # Eval the model.
   print('***** Started evaluation at {} *****'.format(datetime.datetime.now()))
-  print('  Num examples = {}'.format(len(dev)))
+  print('  Num examples = {}'.format(len(dev_features)))
   print('  Batch size = {}'.format(EVAL_BATCH_SIZE))
-  eval_steps = int(len(dev) / EVAL_BATCH_SIZE)
+  eval_steps = int(len(dev_features) / EVAL_BATCH_SIZE)
   eval_input_fn = run_classifier.input_fn_builder(
-      features=eval_features,
+      features=dev_features,
       seq_length=MAX_SEQ_LENGTH,
       is_training=False,
       drop_remainder=True)
@@ -102,14 +103,14 @@ def main():
     learning_rate=LEARNING_RATE,
     num_train_steps=num_train_steps,
     num_warmup_steps=num_warmup_steps,
+    use_tpu=False,
     bert_hub_module_handle=BERT_MODEL_HUB
   )
   estimator = tf.estimator.Estimator(
   model_fn=model_fn,
   config=run_config,
-  params={"batch_size": BATCH_SIZE})
-  train_features, dev_features = preprocess(train_dict)
-  model_train(estimator, train_features)
+  params={"batch_size": TRAIN_BATCH_SIZE})
+  model_train(estimator, train_features, num_train_steps)
   model_eval(estimator, dev_features)
 
 if __name__ == '__main__':
