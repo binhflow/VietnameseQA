@@ -1,6 +1,3 @@
-import sys
-if not 'bert_repo' in sys.path:
-  sys.path += ['bert_repo']
 from tensorflow import keras
 import os
 import pandas as pd
@@ -21,7 +18,7 @@ def download_data(link, name):
     data_dict = json.load(f)
   return data_dict
 
-def preprocess(data_dict):
+def preprocess(data_dict, modelhub):
   df = pd.DataFrame.from_dict(data_dict)
   df['label'] = np.where(df['label']==True,1,0)
   train, dev = train_test_split(df, test_size=0.01, random_state=42)
@@ -72,24 +69,28 @@ def model_eval(estimator, dev_features):
       print('  {} = {}'.format(key, str(result[key])))
       writer.write("%s = %s\n" % (key, str(result[key])))
 
+OUTPUT_DIR ='./wikiqa/outputs'
+BERT_MODEL = 'multi_cased_L-12_H-768_A-12'
+BERT_MODEL_HUB = 'https://tfhub.dev/google/bert_' + BERT_MODEL + '/1'
+TRAIN_BATCH_SIZE = 16
+EVAL_BATCH_SIZE = 8
+PREDICT_BATCH_SIZE = 8
+LEARNING_RATE = 2e-5
+NUM_TRAIN_EPOCHS = 3.0
+MAX_SEQ_LENGTH = 256
+# Warmup is a period of time where hte learning rate 
+# is small and gradually increases--usually helps training.
+WARMUP_PROPORTION = 0.1
+# Model configs
+SAVE_CHECKPOINTS_STEPS = 1000
+SAVE_SUMMARY_STEPS = 1000
+label_list = [0,1]
+
 def main():
   #Global
-  OUTPUT_DIR ='./wikiqa/outputs'
-  BERT_MODEL = 'multi_cased_L-12_H-768_A-12'
-  BERT_MODEL_HUB = 'https://tfhub.dev/google/bert_' + BERT_MODEL + '/1'
-  TRAIN_BATCH_SIZE = 16
-  EVAL_BATCH_SIZE = 8
-  PREDICT_BATCH_SIZE = 8
-  LEARNING_RATE = 2e-5
-  NUM_TRAIN_EPOCHS = 3.0
-  MAX_SEQ_LENGTH = 256
-  # Warmup is a period of time where hte learning rate 
-  # is small and gradually increases--usually helps training.
-  WARMUP_PROPORTION = 0.1
-  # Model configs
-  SAVE_CHECKPOINTS_STEPS = 1000
-  SAVE_SUMMARY_STEPS = 1000
-  num_train_steps = int(len(train) / TRAIN_BATCH_SIZE * NUM_TRAIN_EPOCHS)
+  train_dict = download_data('https://dl.challenge.zalo.ai/ZAC2019_VietnameseWikiQA/train.zip','train')
+  train_features, dev_features = preprocess(train_dict, BERT_MODEL_HUB)
+  num_train_steps = int(len(train_features) / TRAIN_BATCH_SIZE * NUM_TRAIN_EPOCHS)
   num_warmup_steps = int(num_train_steps * WARMUP_PROPORTION)
   os.environ['TFHUB_CACHE_DIR'] = OUTPUT_DIR
   run_config = tf.estimator.RunConfig(
@@ -101,14 +102,12 @@ def main():
     learning_rate=LEARNING_RATE,
     num_train_steps=num_train_steps,
     num_warmup_steps=num_warmup_steps,
-    use_tpu=True,
     bert_hub_module_handle=BERT_MODEL_HUB
   )
   estimator = tf.estimator.Estimator(
   model_fn=model_fn,
   config=run_config,
   params={"batch_size": BATCH_SIZE})
-  train_dict = download('https://dl.challenge.zalo.ai/ZAC2019_VietnameseWikiQA/train.zip','train')
   train_features, dev_features = preprocess(train_dict)
   model_train(estimator, train_features)
   model_eval(estimator, dev_features)
