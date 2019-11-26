@@ -112,4 +112,7 @@ def main():
   model_train(estimator, train_features)
   model_eval(estimator, dev_features)
 
+if __name__ == '__main__':
+  main()
+
 
